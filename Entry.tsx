@@ -39,7 +39,6 @@ import KebabSvg from './assets/svgs/KebabSvg';
 import ReverseBtnSvg from './assets/svgs/ReverseBtnSvg';
 import MenusControl from './components/MenusControl';
 import VideoControl from './components/VideoControl';
-import { useScreenRecorder } from './hooks/useScreenRecorder';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -132,16 +131,6 @@ const Entry = () => {
 	const [permissionResponse, requestPermission] = MediaLibrary.usePermissions();
 	const [facing, setFacing] = useState<CameraType>('back');
 	const [cameraPermission, requestCameraPermission] = useCameraPermissions();
-
-	// Screen recording hook
-	const {
-		isRecording,
-		isPaused,
-		startRecording,
-		stopRecording,
-		toggleRecording,
-		cleanup,
-	} = useScreenRecorder();
 
 	// Get the current video URI
 	const currentVideoUri = videos?.[0]?.uri;
@@ -1473,13 +1462,6 @@ const Entry = () => {
 		}
 	}, []);
 
-	// Cleanup screen recording on unmount
-	useEffect(() => {
-		return () => {
-			cleanup();
-		};
-	}, [cleanup]);
-
 	// Reset mirror state when activeFrame changes to 2
 	useEffect(() => {
 		if (activeFrame === 2) {
@@ -1898,8 +1880,8 @@ const Entry = () => {
 					openCamera={openCamera}
 					setCameraState={() => setCamera((prev) => !prev)}
 					takeSnapShot={onSaveImageAsync}
-					isRecording={isRecording}
-					toggleRecording={toggleRecording}
+					isRecording={false}
+					toggleRecording={() => null}
 				/>
 				<VideoControl
 					handleSeek={handleSeek}
