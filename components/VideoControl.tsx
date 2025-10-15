@@ -94,11 +94,12 @@ const VideoControl = ({
 					value={sliderValue}
 					minimumTrackTintColor="#FFFFFF"
 					maximumTrackTintColor="rgba(255,255,255,0.3)"
+					thumbTintColor="#fff"
 					onSlidingStart={handleSliderStart}
 					onValueChange={handleSliderChange}
 					onSlidingComplete={handleSliderComplete}
 					disabled={duration <= 0}
-					step={0.01} // Reduced step for smoother seeking
+					step={0.01}
 				/>
 				<Pressable onPress={() => handleSkipForward(5)}>
 					<ForwardSvg />

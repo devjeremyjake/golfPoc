@@ -6,8 +6,9 @@ import { throttle } from 'lodash';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
 	Dimensions,
+	PermissionsAndroid,
+	Platform,
 	Pressable,
-	SafeAreaView,
 	StyleSheet,
 	Text,
 	View,
@@ -18,6 +19,7 @@ import Animated, {
 	useSharedValue,
 	withSpring,
 } from 'react-native-reanimated';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, {
 	Circle,
 	G,
@@ -39,6 +41,7 @@ import KebabSvg from './assets/svgs/KebabSvg';
 import ReverseBtnSvg from './assets/svgs/ReverseBtnSvg';
 import MenusControl from './components/MenusControl';
 import VideoControl from './components/VideoControl';
+import { viewRecorder } from './libs/ViewRecorder';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -84,6 +87,10 @@ const Entry = () => {
 	const [kebabOpen, setKebab] = useState<boolean>(false);
 
 	const imageRef = useRef<View>(null);
+	// Recording state
+	const [isRecording, setIsRecording] = useState(false);
+	const [recordingTime, setRecordingTime] = useState(0);
+	const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
 	// Shape drawing states
 	const [isDrawingCircle, setIsDrawingCircle] = useState(false);
@@ -1489,8 +1496,146 @@ const Entry = () => {
 		}
 	}, [activeFrame, player, playerTwo]);
 
+	// Android permission handling for the native file integration
+	const requestPermissions = async () => {
+		try {
+			if (Platform.OS !== 'android') {
+				return true;
+			}
+
+			// Request audio permission
+			const audioPermission = await PermissionsAndroid.request(
+				PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+				{
+					title: 'Audio Recording Permission',
+					message: 'This app needs access to your microphone to record audio.',
+					buttonNeutral: 'Ask Me Later',
+					buttonNegative: 'Cancel',
+					buttonPositive: 'OK',
+				}
+			);
+
+			if (audioPermission !== PermissionsAndroid.RESULTS.GRANTED) {
+				console.log('Audio permission denied');
+				return false;
+			}
+
+			// For Android 13+ (API 33+), we don't need WRITE_EXTERNAL_STORAGE
+			// For Android 12 and below, request storage permission
+			const androidVersion = Platform.Version;
+			if (androidVersion < 33) {
+				const storagePermission = await PermissionsAndroid.request(
+					PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
+					{
+						title: 'Storage Permission',
+						message: 'This app needs access to your storage to save videos.',
+						buttonNeutral: 'Ask Me Later',
+						buttonNegative: 'Cancel',
+						buttonPositive: 'OK',
+					}
+				);
+
+				if (storagePermission !== PermissionsAndroid.RESULTS.GRANTED) {
+					console.log('Storage permission denied');
+					return false;
+				}
+			}
+
+			console.log('All permissions granted');
+			return true;
+		} catch (err) {
+			console.error('Error requesting permissions:', err);
+			return false;
+		}
+	};
+
+	useEffect(() => {
+		if (Platform.OS === 'android') {
+			requestPermissions();
+		}
+	}, []);
+
+	// Handle recording start
+	const handleStart = async () => {
+		try {
+			// Ensure we request permissions first
+			if (Platform.OS === 'android') {
+				console.log('Requesting permissions...');
+				const hasPermissions = await requestPermissions();
+				console.log('Permissions granted:', hasPermissions);
+
+				if (!hasPermissions) {
+					alert(
+						'Recording permissions are required. Please grant microphone access in settings.'
+					);
+					return;
+				}
+			}
+
+			if (!imageRef.current) {
+				alert('View reference not ready');
+				return;
+			}
+
+			console.log('Starting view recording...');
+			// Start recording the specific view with audio
+			await viewRecorder.startRecording(imageRef.current);
+
+			console.log('View recording started successfully');
+
+			setIsRecording(true);
+			setRecordingTime(0);
+			recordingIntervalRef.current = setInterval(() => {
+				setRecordingTime((prev) => prev + 1);
+			}, 1000);
+		} catch (error) {
+			console.error('Error starting recording:', error);
+			alert(`Failed to start recording: ${error.message || error}`);
+		}
+	};
+
+	// Handle stop recording
+	const handleStop = async () => {
+		try {
+			if (recordingIntervalRef.current) {
+				clearInterval(recordingIntervalRef.current);
+			}
+
+			// Stop the view recording
+			const videoPath = await viewRecorder.stopRecording();
+			setIsRecording(false);
+			setRecordingTime(0);
+
+			console.log('Video saved at:', videoPath);
+
+			if (!videoPath) {
+				alert('No video path returned');
+				return;
+			}
+
+			// Add a small delay to ensure file is fully written
+			await new Promise((resolve) => setTimeout(resolve, 500));
+
+			try {
+				const asset = await MediaLibrary.saveToLibraryAsync(videoPath);
+				console.log('Asset saved:', asset);
+				alert('Video saved to gallery!');
+			} catch (saveError) {
+				console.error('Error saving to gallery:', saveError);
+				alert(`Failed to save: ${saveError.message}`);
+			}
+		} catch (error) {
+			console.error('Error stopping recording:', error);
+			setIsRecording(false);
+			alert(`Recording error: ${error.message}`);
+		}
+	};
+
 	return (
-		<SafeAreaView style={{ flex: 1, backgroundColor: '#000' }}>
+		<SafeAreaView
+			style={{ flex: 1, backgroundColor: '#000' }}
+			edges={['top', 'bottom']}
+		>
 			{/* Header section */}
 			<View style={styles.headerMenuContainer}>
 				<Pressable
@@ -1502,6 +1647,8 @@ const Entry = () => {
 						color={drawingHistory.length === 0 ? '#959494ff' : '#fff'}
 					/>
 				</Pressable>
+
+				<Text style={styles.headerRightMenu}>{recordingTime || 0}</Text>
 
 				<View style={styles.headerRightContainer}>
 					<Pressable disabled={drawingHistory.length === 0} onPress={undoLast}>
@@ -1533,259 +1680,263 @@ const Entry = () => {
 				</View>
 			</View>
 			{/* Video & Canvas section */}
-			<View style={{ flex: 1 }} ref={imageRef} collapsable={false}>
-				{/* Video section */}
-				<View style={styles.videoColumn}>
-					{/* Frame 1 */}
-					<View style={styles.videoFrame}>
-						{videos[0]?.uri ? (
-							<VideoView
-								player={player}
-								style={
-									videoMirrored && activeFrame === 0
-										? styles.videoMirrored
-										: styles.video
-								}
-								contentFit="contain"
-								nativeControls={false}
-							/>
-						) : (
-							<View style={styles.emptyFrame} />
-						)}
+			<View style={{ flex: 1 }}>
+				<View style={{ flex: 1 }} ref={imageRef} collapsable={false}>
+					{/* Video section */}
+					<View style={styles.videoColumn}>
+						{/* Frame 1 */}
+						<View style={styles.videoFrame}>
+							{videos[0]?.uri ? (
+								<VideoView
+									player={player}
+									style={
+										videoMirrored && activeFrame === 0
+											? styles.videoMirrored
+											: styles.video
+									}
+									contentFit="contain"
+									nativeControls={false}
+								/>
+							) : (
+								<View style={styles.emptyFrame} />
+							)}
+						</View>
+						{/* Frame 2 */}
+						<View style={styles.videoFrame}>
+							{videos[1]?.uri ? (
+								<VideoView
+									player={playerTwo}
+									style={
+										videoMirrored && activeFrame === 1
+											? styles.videoMirrored
+											: styles.video
+									}
+									contentFit="contain"
+									nativeControls={false}
+								/>
+							) : (
+								<View style={styles.emptyFrame} />
+							)}
+						</View>
 					</View>
-					{/* Frame 2 */}
-					<View style={styles.videoFrame}>
-						{videos[1]?.uri ? (
-							<VideoView
-								player={playerTwo}
-								style={
-									videoMirrored && activeFrame === 1
-										? styles.videoMirrored
-										: styles.video
-								}
-								contentFit="contain"
-								nativeControls={false}
-							/>
-						) : (
-							<View style={styles.emptyFrame} />
-						)}
-					</View>
-				</View>
-				{/* Canvas section */}
-				<View
-					style={styles.canvasOverlay}
-					onTouchMove={onTouchMove}
-					onTouchEnd={onTouchEnd}
-					onTouchStart={onTouchStart}
-				>
-					<Svg
-						width={SCREEN_WIDTH}
-						height={CANVAS_HEIGHT}
-						style={{ backgroundColor: 'transparent' }}
+					{/* Canvas section for drawing - handles touch events */}
+					<View
+						style={styles.canvasOverlay}
+						onTouchMove={onTouchMove}
+						onTouchEnd={onTouchEnd}
+						onTouchStart={onTouchStart}
 					>
-						{/* Render completed paths */}
-						{paths.map((pathData, index) => (
-							<Path
-								key={`completed-path-${index}`}
-								d={pathData}
-								stroke={currentColor}
-								fill="transparent"
-								strokeWidth={2}
-								strokeLinejoin="round"
-								strokeLinecap="round"
-							/>
-						))}
-
-						{/* Render completed circles */}
-						{circles.map((circle, index) => (
-							<Circle
-								key={`completed-circle-${index}`}
-								cx={circle.cx}
-								cy={circle.cy}
-								r={circle.r}
-								stroke={currentColor}
-								fill="transparent"
-								strokeWidth={
-									selectedItem?.type === 'circle' &&
-									selectedItem?.index === index
-										? 3
-										: 2
-								}
-							/>
-						))}
-
-						{/* Render completed lines */}
-						{lines.map((line, index) => (
-							<Line
-								key={`completed-line-${index}`}
-								x1={line.x1}
-								y1={line.y1}
-								x2={line.x2}
-								y2={line.y2}
-								stroke={currentColor}
-								strokeWidth={
-									selectedItem?.type === 'line' && selectedItem?.index === index
-										? 3
-										: 2
-								}
-								strokeLinecap="round"
-							/>
-						))}
-
-						{/* Render completed arrows */}
-						{arrows.map((arrow, index) => (
-							<Path
-								key={`completed-arrow-${index}`}
-								d={createArrowPath(arrow.x1, arrow.y1, arrow.x2, arrow.y2)}
-								stroke={currentColor}
-								fill="transparent"
-								strokeWidth={
-									selectedItem?.type === 'arrow' &&
-									selectedItem?.index === index
-										? 3
-										: 2
-								}
-								strokeLinejoin="round"
-								strokeLinecap="round"
-							/>
-						))}
-
-						{/* Render completed angles */}
-						{angles.map((angle, index) => {
-							const isSelected =
-								selectedItem?.type === 'angle' && selectedItem?.index === index;
-							return (
-								<G key={`completed-angle-${index}`}>
-									{renderAngle(angle, currentColor, false, isSelected)}
-								</G>
-							);
-						})}
-
-						{/* Render completed rectangles */}
-						{rectangles.map((rect, index) => (
-							<Rect
-								key={`completed-rectangle-${index}`}
-								x={rect.x}
-								y={rect.y}
-								width={rect.width}
-								height={rect.height}
-								stroke={currentColor}
-								fill="transparent"
-								strokeWidth={
-									selectedItem?.type === 'rectangle' &&
-									selectedItem?.index === index
-										? 3
-										: 2
-								}
-							/>
-						))}
-
-						{/* Render current path being drawn */}
-						{currentTool === 'freedraw' && currentPath.length > 0 && (
-							<Path
-								d={currentPath}
-								stroke={currentColor}
-								fill="transparent"
-								strokeWidth={2}
-								strokeLinejoin="round"
-								strokeLinecap="round"
-							/>
-						)}
-
-						{/* Render temporary circle being drawn */}
-						{currentTool === 'circle' && tempCircle && tempCircle.r > 0 && (
-							<Circle
-								cx={tempCircle.cx}
-								cy={tempCircle.cy}
-								r={tempCircle.r}
-								stroke={currentColor}
-								fill="transparent"
-								strokeWidth={2}
-								strokeDasharray="5,5"
-							/>
-						)}
-
-						{/* Render temporary line being drawn */}
-						{currentTool === 'line' && tempLine && (
-							<Line
-								x1={tempLine.x1}
-								y1={tempLine.y1}
-								x2={tempLine.x2}
-								y2={tempLine.y2}
-								stroke={currentColor}
-								strokeWidth={2}
-								strokeDasharray="5,5"
-								strokeLinecap="round"
-							/>
-						)}
-
-						{/* Render temporary arrow being drawn */}
-						{currentTool === 'arrow' && tempArrow && (
-							<Path
-								d={createArrowPath(
-									tempArrow.x1,
-									tempArrow.y1,
-									tempArrow.x2,
-									tempArrow.y2
-								)}
-								stroke={currentColor}
-								fill="transparent"
-								strokeWidth={2}
-								strokeDasharray="5,5"
-								strokeLinejoin="round"
-								strokeLinecap="round"
-							/>
-						)}
-
-						{/* Temporary angle (while drawing) */}
-						{currentTool === 'angle' && tempAngle && (
-							<G>{renderAngle(tempAngle, currentColor, true)}</G>
-						)}
-
-						{/* Render temporary rectangle being drawn */}
-						{currentTool === 'rectangle' && tempRectangle && (
-							<Rect
-								x={Math.min(
-									rectangleStart.x,
-									rectangleStart.x + tempRectangle.width
-								)}
-								y={Math.min(
-									rectangleStart.y,
-									rectangleStart.y + tempRectangle.height
-								)}
-								width={Math.abs(tempRectangle.width)}
-								height={Math.abs(tempRectangle.height)}
-								stroke={currentColor}
-								fill="transparent"
-								strokeWidth={2}
-								strokeDasharray="5,5"
-							/>
-						)}
-
-						{/* Render resize handles */}
-						{renderResizeHandles()}
-					</Svg>
-				</View>
-				{/* Camera tray */}
-				{openCamera && (
-					<GestureDetector gesture={panCameraGesture}>
-						<Animated.View
-							style={[cameraAnimatedStyles, styles.cameraTrayContainer]}
+						<Svg
+							width={SCREEN_WIDTH}
+							height={CANVAS_HEIGHT}
+							style={{ backgroundColor: 'transparent' }}
 						>
-							<CameraView style={styles.camera} facing={facing} />
-							<Pressable
-								onPress={() =>
-									setFacing((current) =>
-										current === 'back' ? 'front' : 'back'
-									)
-								}
-								style={styles.flipCameraBtn}
+							{/* Render completed paths */}
+							{paths.map((pathData, index) => (
+								<Path
+									key={`completed-path-${index}`}
+									d={pathData}
+									stroke={currentColor}
+									fill="transparent"
+									strokeWidth={2}
+									strokeLinejoin="round"
+									strokeLinecap="round"
+								/>
+							))}
+
+							{/* Render completed circles */}
+							{circles.map((circle, index) => (
+								<Circle
+									key={`completed-circle-${index}`}
+									cx={circle.cx}
+									cy={circle.cy}
+									r={circle.r}
+									stroke={currentColor}
+									fill="transparent"
+									strokeWidth={
+										selectedItem?.type === 'circle' &&
+										selectedItem?.index === index
+											? 3
+											: 2
+									}
+								/>
+							))}
+
+							{/* Render completed lines */}
+							{lines.map((line, index) => (
+								<Line
+									key={`completed-line-${index}`}
+									x1={line.x1}
+									y1={line.y1}
+									x2={line.x2}
+									y2={line.y2}
+									stroke={currentColor}
+									strokeWidth={
+										selectedItem?.type === 'line' &&
+										selectedItem?.index === index
+											? 3
+											: 2
+									}
+									strokeLinecap="round"
+								/>
+							))}
+
+							{/* Render completed arrows */}
+							{arrows.map((arrow, index) => (
+								<Path
+									key={`completed-arrow-${index}`}
+									d={createArrowPath(arrow.x1, arrow.y1, arrow.x2, arrow.y2)}
+									stroke={currentColor}
+									fill="transparent"
+									strokeWidth={
+										selectedItem?.type === 'arrow' &&
+										selectedItem?.index === index
+											? 3
+											: 2
+									}
+									strokeLinejoin="round"
+									strokeLinecap="round"
+								/>
+							))}
+
+							{/* Render completed angles */}
+							{angles.map((angle, index) => {
+								const isSelected =
+									selectedItem?.type === 'angle' &&
+									selectedItem?.index === index;
+								return (
+									<G key={`completed-angle-${index}`}>
+										{renderAngle(angle, currentColor, false, isSelected)}
+									</G>
+								);
+							})}
+
+							{/* Render completed rectangles */}
+							{rectangles.map((rect, index) => (
+								<Rect
+									key={`completed-rectangle-${index}`}
+									x={rect.x}
+									y={rect.y}
+									width={rect.width}
+									height={rect.height}
+									stroke={currentColor}
+									fill="transparent"
+									strokeWidth={
+										selectedItem?.type === 'rectangle' &&
+										selectedItem?.index === index
+											? 3
+											: 2
+									}
+								/>
+							))}
+
+							{/* Render current path being drawn */}
+							{currentTool === 'freedraw' && currentPath.length > 0 && (
+								<Path
+									d={currentPath}
+									stroke={currentColor}
+									fill="transparent"
+									strokeWidth={2}
+									strokeLinejoin="round"
+									strokeLinecap="round"
+								/>
+							)}
+
+							{/* Render temporary circle being drawn */}
+							{currentTool === 'circle' && tempCircle && tempCircle.r > 0 && (
+								<Circle
+									cx={tempCircle.cx}
+									cy={tempCircle.cy}
+									r={tempCircle.r}
+									stroke={currentColor}
+									fill="transparent"
+									strokeWidth={2}
+									strokeDasharray="5,5"
+								/>
+							)}
+
+							{/* Render temporary line being drawn */}
+							{currentTool === 'line' && tempLine && (
+								<Line
+									x1={tempLine.x1}
+									y1={tempLine.y1}
+									x2={tempLine.x2}
+									y2={tempLine.y2}
+									stroke={currentColor}
+									strokeWidth={2}
+									strokeDasharray="5,5"
+									strokeLinecap="round"
+								/>
+							)}
+
+							{/* Render temporary arrow being drawn */}
+							{currentTool === 'arrow' && tempArrow && (
+								<Path
+									d={createArrowPath(
+										tempArrow.x1,
+										tempArrow.y1,
+										tempArrow.x2,
+										tempArrow.y2
+									)}
+									stroke={currentColor}
+									fill="transparent"
+									strokeWidth={2}
+									strokeDasharray="5,5"
+									strokeLinejoin="round"
+									strokeLinecap="round"
+								/>
+							)}
+
+							{/* Temporary angle (while drawing) */}
+							{currentTool === 'angle' && tempAngle && (
+								<G>{renderAngle(tempAngle, currentColor, true)}</G>
+							)}
+
+							{/* Render temporary rectangle being drawn */}
+							{currentTool === 'rectangle' && tempRectangle && (
+								<Rect
+									x={Math.min(
+										rectangleStart.x,
+										rectangleStart.x + tempRectangle.width
+									)}
+									y={Math.min(
+										rectangleStart.y,
+										rectangleStart.y + tempRectangle.height
+									)}
+									width={Math.abs(tempRectangle.width)}
+									height={Math.abs(tempRectangle.height)}
+									stroke={currentColor}
+									fill="transparent"
+									strokeWidth={2}
+									strokeDasharray="5,5"
+								/>
+							)}
+
+							{/* Render resize handles */}
+							{renderResizeHandles()}
+						</Svg>
+					</View>
+					{/* Camera tray */}
+					{openCamera && (
+						<GestureDetector gesture={panCameraGesture}>
+							<Animated.View
+								style={[cameraAnimatedStyles, styles.cameraTrayContainer]}
 							>
-								<CamersFlipSvg />
-							</Pressable>
-						</Animated.View>
-					</GestureDetector>
-				)}
+								<CameraView style={styles.camera} facing={facing} />
+								<Pressable
+									onPress={() =>
+										setFacing((current) =>
+											current === 'back' ? 'front' : 'back'
+										)
+									}
+									style={styles.flipCameraBtn}
+								>
+									<CamersFlipSvg />
+								</Pressable>
+							</Animated.View>
+						</GestureDetector>
+					)}
+				</View>
 			</View>
 			{/* Tool Tray */}
 			{toolsTrayOpen && (
@@ -1880,8 +2031,9 @@ const Entry = () => {
 					openCamera={openCamera}
 					setCameraState={() => setCamera((prev) => !prev)}
 					takeSnapShot={onSaveImageAsync}
-					isRecording={false}
-					toggleRecording={() => null}
+					isRecording={isRecording}
+					toggleRecording={isRecording ? handleStop : handleStart}
+					disabled={false}
 				/>
 				<VideoControl
 					handleSeek={handleSeek}

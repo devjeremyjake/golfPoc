@@ -15,6 +15,7 @@ interface MenuProps {
 	takeSnapShot: () => void;
 	isRecording: boolean;
 	toggleRecording: () => void;
+	disabled: boolean;
 }
 
 const MenusControl = ({
@@ -26,6 +27,7 @@ const MenusControl = ({
 	takeSnapShot,
 	isRecording,
 	toggleRecording,
+	disabled,
 }: MenuProps) => {
 	return (
 		<View style={styles.container}>
@@ -38,7 +40,7 @@ const MenusControl = ({
 			<Pressable onPress={setCameraState}>
 				<CameraSvg color={openCamera ? '#FF5E5C' : '#FFFFFF'} />
 			</Pressable>
-			<Pressable onPress={toggleRecording}>
+			<Pressable disabled={disabled} onPress={toggleRecording}>
 				<RecordingSvg color={isRecording ? '#FF5E5C' : '#FFFFFF'} />
 			</Pressable>
 			<Pressable onPress={setToolsTrayState}>
