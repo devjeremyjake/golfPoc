@@ -41,7 +41,6 @@ import KebabSvg from './assets/svgs/KebabSvg';
 import ReverseBtnSvg from './assets/svgs/ReverseBtnSvg';
 import MenusControl from './components/MenusControl';
 import VideoControl from './components/VideoControl';
-import { viewRecorder } from './libs/ViewRecorder';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -86,11 +85,8 @@ const Entry = () => {
 	const [drawingHistory, setDrawingHistory] = useState([]);
 	const [kebabOpen, setKebab] = useState<boolean>(false);
 
-	const imageRef = useRef<View>(null);
-	// Recording state
-	const [isRecording, setIsRecording] = useState(false);
-	const [recordingTime, setRecordingTime] = useState(0);
-	const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+	const imageRef = useRef(null);
+	const isRecording = false;
 
 	// Shape drawing states
 	const [isDrawingCircle, setIsDrawingCircle] = useState(false);
@@ -1043,10 +1039,6 @@ const Entry = () => {
 		}
 	};
 
-	const exitEditMode = () => {
-		setSelectedItem(null);
-	};
-
 	// Tray drag gesture
 	const panGesture = Gesture.Pan()
 		.minDistance(1)
@@ -1446,9 +1438,15 @@ const Entry = () => {
 	// Save screenshot
 	const onSaveImageAsync = async () => {
 		try {
+			if (!imageRef.current) {
+				console.log('View ref is not available');
+				return;
+			}
+
 			const localUri = await captureRef(imageRef, {
 				height: CANVAS_HEIGHT,
 				quality: 1,
+				format: 'png',
 			});
 
 			await MediaLibrary.saveToLibraryAsync(localUri);
@@ -1456,7 +1454,8 @@ const Entry = () => {
 				alert('Saved!');
 			}
 		} catch (e) {
-			console.log(e);
+			console.error('Error saving image:', e);
+			alert('Failed to save image: ' + e.message);
 		}
 	};
 
@@ -1556,80 +1555,10 @@ const Entry = () => {
 	}, []);
 
 	// Handle recording start
-	const handleStart = async () => {
-		try {
-			// Ensure we request permissions first
-			if (Platform.OS === 'android') {
-				console.log('Requesting permissions...');
-				const hasPermissions = await requestPermissions();
-				console.log('Permissions granted:', hasPermissions);
-
-				if (!hasPermissions) {
-					alert(
-						'Recording permissions are required. Please grant microphone access in settings.'
-					);
-					return;
-				}
-			}
-
-			if (!imageRef.current) {
-				alert('View reference not ready');
-				return;
-			}
-
-			console.log('Starting view recording...');
-			// Start recording the specific view with audio
-			await viewRecorder.startRecording(imageRef.current);
-
-			console.log('View recording started successfully');
-
-			setIsRecording(true);
-			setRecordingTime(0);
-			recordingIntervalRef.current = setInterval(() => {
-				setRecordingTime((prev) => prev + 1);
-			}, 1000);
-		} catch (error) {
-			console.error('Error starting recording:', error);
-			alert(`Failed to start recording: ${error.message || error}`);
-		}
-	};
+	const handleStart = async () => {};
 
 	// Handle stop recording
-	const handleStop = async () => {
-		try {
-			if (recordingIntervalRef.current) {
-				clearInterval(recordingIntervalRef.current);
-			}
-
-			// Stop the view recording
-			const videoPath = await viewRecorder.stopRecording();
-			setIsRecording(false);
-			setRecordingTime(0);
-
-			console.log('Video saved at:', videoPath);
-
-			if (!videoPath) {
-				alert('No video path returned');
-				return;
-			}
-
-			// Add a small delay to ensure file is fully written
-			await new Promise((resolve) => setTimeout(resolve, 500));
-
-			try {
-				const asset = await MediaLibrary.saveToLibraryAsync(videoPath);
-				console.log('Asset saved:', asset);
-				alert('Video saved to gallery!');
-			} catch (saveError) {
-				console.error('Error saving to gallery:', saveError);
-				alert(`Failed to save: ${saveError.message}`);
-			}
-		} catch (error) {
-			console.error('Error stopping recording:', error);
-			setIsRecording(false);
-			alert(`Recording error: ${error.message}`);
-		}
-	};
+	const handleStop = async () => {};
 
 	return (
 		<SafeAreaView
@@ -1647,8 +1576,6 @@ const Entry = () => {
 						color={drawingHistory.length === 0 ? '#959494ff' : '#fff'}
 					/>
 				</Pressable>
-
-				<Text style={styles.headerRightMenu}>{recordingTime || 0}</Text>
 
 				<View style={styles.headerRightContainer}>
 					<Pressable disabled={drawingHistory.length === 0} onPress={undoLast}>
@@ -2031,7 +1958,7 @@ const Entry = () => {
 					openCamera={openCamera}
 					setCameraState={() => setCamera((prev) => !prev)}
 					takeSnapShot={onSaveImageAsync}
-					isRecording={isRecording}
+					isRecording={false}
 					toggleRecording={isRecording ? handleStop : handleStart}
 					disabled={false}
 				/>
@@ -2156,7 +2083,7 @@ const styles = StyleSheet.create({
 		position: 'absolute',
 		top: 0,
 		left: 0,
-		width: 220,
+		width: 200,
 		height: 190,
 		backgroundColor: '#2D2C2C',
 		borderRadius: 16,
@@ -2208,6 +2135,8 @@ const styles = StyleSheet.create({
 	camera: {
 		flex: 1,
 		borderRadius: 16,
+		width: 320,
+		height: 270,
 	},
 	flipCameraBtn: {
 		position: 'absolute',

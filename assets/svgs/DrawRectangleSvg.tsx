@@ -3,7 +3,7 @@ import Svg, { Path, SvgProps } from 'react-native-svg';
 const SVGComponent = (props: SvgProps) => {
 	const { color } = props;
 	return (
-		<Svg width={45} height={45} viewBox="0 0 25 25" fill="none" {...props}>
+		<Svg width={35} height={35} viewBox="0 0 25 25" fill="none" {...props}>
 			<Path
 				d="M21.5918 10.391V21.191C21.5918 21.5224 21.3232 21.791 20.9918 21.791H10.1918C9.86043 21.791 9.5918 21.5224 9.5918 21.191V10.391C9.5918 10.0596 9.86043 9.79102 10.1918 9.79102H20.9918C21.3232 9.79102 21.5918 10.0596 21.5918 10.391Z"
 				stroke={color}
