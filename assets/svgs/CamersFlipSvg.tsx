@@ -1,9 +1,13 @@
 import * as React from 'react';
+import { Platform } from 'react-native';
 import Svg, { Path, Polyline, SvgProps } from 'react-native-svg';
+
+const SIZE = Platform.OS === 'android' ? 28 : 35;
+
 const SVGComponent = (props: SvgProps) => (
 	<Svg
-		width="35px"
-		height="35px"
+		width={SIZE}
+		height={SIZE}
 		viewBox="0 0 64 64"
 		strokeWidth={3}
 		stroke="#fff"

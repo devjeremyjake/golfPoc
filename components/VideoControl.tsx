@@ -8,6 +8,7 @@ import PauseSvg from '../assets/svgs/PauseSvg';
 import PlayBtnSvg from '../assets/svgs/PlayBtnSvg';
 import RewindSvg from '../assets/svgs/RewindSvg';
 import { debounce } from '../libs/debounce';
+import { scaleModerate } from '../libs/responsive';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -88,7 +89,7 @@ const VideoControl = ({
 					<RewindSvg />
 				</Pressable>
 				<Slider
-					style={{ height: 40, width: SCREEN_WIDTH - 300 }}
+					style={{ height: 40, width: SCREEN_WIDTH - scaleModerate(300) }}
 					minimumValue={0}
 					maximumValue={duration > 0 ? duration : 100}
 					value={sliderValue}
@@ -123,21 +124,21 @@ export default VideoControl;
 const styles = StyleSheet.create({
 	container: {
 		width: '97%',
-		marginHorizontal: 20,
+		marginHorizontal: scaleModerate(20),
 		display: 'flex',
 		flexDirection: 'row',
-		gap: 20,
+		gap: scaleModerate(20),
 	},
 	frameControlContainer: {
 		display: 'flex',
 		alignItems: 'center',
-		gap: 10,
+		gap: scaleModerate(10),
 	},
 	playContainer: {
-		width: 46,
-		height: 46,
+		width: scaleModerate(46),
+		height: scaleModerate(46),
 		backgroundColor: '#F6F6F6',
-		borderRadius: 23,
+		borderRadius: scaleModerate(23),
 		display: 'flex',
 		alignItems: 'center',
 		justifyContent: 'center',
@@ -146,11 +147,11 @@ const styles = StyleSheet.create({
 		display: 'flex',
 		alignItems: 'center',
 		flexDirection: 'row',
-		gap: 20,
+		gap: scaleModerate(20),
 	},
 	roundedContainer: {
-		width: 36,
-		height: 36,
-		borderRadius: 18,
+		width: scaleModerate(36),
+		height: scaleModerate(36),
+		borderRadius: scaleModerate(18),
 	},
 });

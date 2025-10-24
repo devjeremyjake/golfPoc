@@ -1,9 +1,20 @@
 import * as React from 'react';
+import { Platform } from 'react-native';
 import Svg, { Path, SvgProps } from 'react-native-svg';
+
+const WIDTH = Platform.OS === 'android' ? 21 : 25;
+const HEIGHT = Platform.OS === 'android' ? 20 : 24;
+
 const SVGComponent = (props: SvgProps) => {
 	const { color } = props;
 	return (
-		<Svg width={25} height={24} viewBox="0 0 25 24" fill="none" {...props}>
+		<Svg
+			width={WIDTH}
+			height={HEIGHT}
+			viewBox="0 0 25 24"
+			fill="none"
+			{...props}
+		>
 			<Path
 				fillRule="evenodd"
 				clipRule="evenodd"

@@ -1,9 +1,13 @@
 import * as React from 'react';
+import { Platform } from 'react-native';
 import Svg, { Path, SvgProps } from 'react-native-svg';
+
+const SIZE = Platform.OS === 'android' ? 28 : 35;
+
 const SVGComponent = (props: SvgProps) => {
 	const { color } = props;
 	return (
-		<Svg width={35} height={35} viewBox="0 0 25 25" fill="none" {...props}>
+		<Svg width={SIZE} height={SIZE} viewBox="0 0 25 25" fill="none" {...props}>
 			<Path
 				d="M20.7959 22.791H16.7959C9.06391 22.791 2.7959 16.523 2.7959 8.79102V4.79102"
 				stroke={color}

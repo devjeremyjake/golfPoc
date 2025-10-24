@@ -5,6 +5,7 @@ import CameraSvg from '../assets/svgs/CameraSvg';
 import PlusSignSvg from '../assets/svgs/PlusSignSvg';
 import RecordingSvg from '../assets/svgs/RecordingSvg';
 import ViewGridSvg from '../assets/svgs/ViewGridSvg';
+import { scaleModerate } from '../libs/responsive';
 
 interface MenuProps {
 	handlePlusClick: () => void;
@@ -58,6 +59,6 @@ const styles = StyleSheet.create({
 		alignItems: 'center',
 		justifyContent: 'center',
 		flexDirection: 'row',
-		gap: 40,
+		gap: scaleModerate(40),
 	},
 });

@@ -41,6 +41,8 @@ import KebabSvg from './assets/svgs/KebabSvg';
 import ReverseBtnSvg from './assets/svgs/ReverseBtnSvg';
 import MenusControl from './components/MenusControl';
 import VideoControl from './components/VideoControl';
+import { scaleFont, scaleModerate } from './libs/responsive';
+import ScreenRecorderModule from './modules/screen-recorder';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -67,6 +69,9 @@ const Entry = () => {
 	const offsetX = useSharedValue(SCREEN_WIDTH - 230);
 	const offsetY = useSharedValue(SCREEN_HEIGHT / 2 - 85);
 
+	// Recording indicator animation
+	const recordingDotScale = useSharedValue(1);
+
 	// Camers shsredValue
 	const cameraTranslateX = useSharedValue(20);
 	const cameraTranslateY = useSharedValue(SCREEN_HEIGHT / 2 - 85);
@@ -86,7 +91,7 @@ const Entry = () => {
 	const [kebabOpen, setKebab] = useState<boolean>(false);
 
 	const imageRef = useRef(null);
-	const isRecording = false;
+	const [isRecording, setIsRecording] = useState(false);
 
 	// Shape drawing states
 	const [isDrawingCircle, setIsDrawingCircle] = useState(false);
@@ -1117,6 +1122,13 @@ const Entry = () => {
 		} as any;
 	});
 
+	const recordingDotAnimatedStyle = useAnimatedStyle(() => {
+		'worklet';
+		return {
+			transform: [{ scale: recordingDotScale.value }],
+		};
+	});
+
 	const clearCanvas = () => {
 		setPaths([]);
 		setCircles([]);
@@ -1519,9 +1531,28 @@ const Entry = () => {
 				return false;
 			}
 
+			// Post Notification permission for Android 13+ (API 33+)
+			const androidVersion = Platform.Version;
+			if (androidVersion < 33) {
+				const notificationPermission = await PermissionsAndroid.request(
+					PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
+					{
+						title: 'Notification Permission',
+						message:
+							'This app needs access to send you notifications about recording status.',
+						buttonNegative: 'Cancel',
+						buttonPositive: 'OK',
+					}
+				);
+
+				if (notificationPermission !== PermissionsAndroid.RESULTS.GRANTED) {
+					alert('Notification permission denied');
+					return false;
+				}
+			}
+
 			// For Android 13+ (API 33+), we don't need WRITE_EXTERNAL_STORAGE
 			// For Android 12 and below, request storage permission
-			const androidVersion = Platform.Version;
 			if (androidVersion < 33) {
 				const storagePermission = await PermissionsAndroid.request(
 					PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
@@ -1552,13 +1583,46 @@ const Entry = () => {
 		if (Platform.OS === 'android') {
 			requestPermissions();
 		}
+
+		// Listen for recording state changes
+		const subscription = ScreenRecorderModule.addListener(
+			'onRecordingStateChange',
+			(event: { isRecording: boolean }) => {
+				setIsRecording(event.isRecording);
+			}
+		);
+
+		return () => {
+			subscription.remove();
+		};
 	}, []);
 
-	// Handle recording start
-	const handleStart = async () => {};
+	// Animate recording dot
+	useEffect(() => {
+		if (isRecording) {
+			recordingDotScale.value = withSpring(1.3, {
+				damping: 2,
+				stiffness: 100,
+			});
+			const interval = setInterval(() => {
+				recordingDotScale.value = withSpring(
+					recordingDotScale.value === 1 ? 1.3 : 1,
+					{
+						damping: 2,
+						stiffness: 100,
+					}
+				);
+			}, 800);
+			return () => clearInterval(interval);
+		} else {
+			recordingDotScale.value = withSpring(1);
+		}
+	}, [isRecording]);
 
-	// Handle stop recording
-	const handleStop = async () => {};
+	// Handle recording toggle (works for both iOS and Android)
+	const toggleRecording = async () => {
+		ScreenRecorderModule.startStopRecording();
+	};
 
 	return (
 		<SafeAreaView
@@ -1606,6 +1670,17 @@ const Entry = () => {
 					</Pressable>
 				</View>
 			</View>
+
+			{/* Recording Indicator */}
+			{isRecording && (
+				<View style={styles.recordingIndicator}>
+					<Animated.View
+						style={[styles.recordingDot, recordingDotAnimatedStyle]}
+					/>
+					<Text style={styles.recordingText}>Recording</Text>
+				</View>
+			)}
+
 			{/* Video & Canvas section */}
 			<View style={{ flex: 1 }}>
 				<View style={{ flex: 1 }} ref={imageRef} collapsable={false}>
@@ -1958,8 +2033,8 @@ const Entry = () => {
 					openCamera={openCamera}
 					setCameraState={() => setCamera((prev) => !prev)}
 					takeSnapShot={onSaveImageAsync}
-					isRecording={false}
-					toggleRecording={isRecording ? handleStop : handleStart}
+					isRecording={isRecording}
+					toggleRecording={toggleRecording}
 					disabled={false}
 				/>
 				<VideoControl
@@ -2018,34 +2093,59 @@ const styles = StyleSheet.create({
 		gap: 40,
 	},
 	headerRightMenu: {
-		fontSize: 16,
+		fontSize: scaleFont(16),
 		fontWeight: 500,
 		color: '#FFFFFF',
 	},
+	recordingIndicator: {
+		position: 'absolute',
+		top: scaleModerate(60),
+		left: '50%',
+		transform: [{ translateX: -scaleModerate(60) }],
+		flexDirection: 'row',
+		alignItems: 'center',
+		backgroundColor: 'rgba(255, 94, 92, 0.9)',
+		paddingHorizontal: scaleModerate(16),
+		paddingVertical: scaleModerate(8),
+		borderRadius: scaleModerate(20),
+		zIndex: 100,
+		gap: scaleModerate(8),
+	},
+	recordingDot: {
+		width: scaleModerate(12),
+		height: scaleModerate(12),
+		borderRadius: scaleModerate(6),
+		backgroundColor: '#FFFFFF',
+	},
+	recordingText: {
+		color: '#FFFFFF',
+		fontSize: scaleFont(14),
+		fontWeight: '600',
+	},
 	reverseBtnContainer: {
 		backgroundColor: '#2D2C2C',
-		width: 36,
-		height: 36,
-		borderRadius: 18,
+		width: scaleModerate(36),
+		height: scaleModerate(36),
+		borderRadius: scaleModerate(18),
 		display: 'flex',
 		alignItems: 'center',
 		justifyContent: 'center',
 	},
 	kebabMenuContainer: {
 		position: 'absolute',
-		top: 50,
-		right: 40,
+		top: scaleModerate(50),
+		right: scaleModerate(40),
 		backgroundColor: '#2D2C2C',
-		width: 176,
-		paddingHorizontal: 20,
-		paddingVertical: 20,
+		width: scaleModerate(176),
+		paddingHorizontal: scaleModerate(20),
+		paddingVertical: scaleModerate(20),
 		display: 'flex',
-		gap: 20,
-		borderRadius: 8,
+		gap: scaleModerate(20),
+		borderRadius: scaleModerate(8),
 		zIndex: 20,
 	},
 	kebabMenuText: {
-		fontSize: 12,
+		fontSize: scaleFont(12),
 		fontWeight: 400,
 		color: '#F6F6F6',
 	},
@@ -2083,12 +2183,12 @@ const styles = StyleSheet.create({
 		position: 'absolute',
 		top: 0,
 		left: 0,
-		width: 200,
-		height: 190,
+		width: scaleModerate(200),
+		height: scaleModerate(190),
 		backgroundColor: '#2D2C2C',
-		borderRadius: 16,
-		paddingHorizontal: 10,
-		paddingVertical: 10,
+		borderRadius: scaleModerate(16),
+		paddingHorizontal: scaleModerate(10),
+		paddingVertical: scaleModerate(10),
 		shadowColor: '#000',
 		shadowOpacity: 0.25,
 		shadowOffset: { width: 0, height: 2 },
@@ -2100,10 +2200,10 @@ const styles = StyleSheet.create({
 		flexDirection: 'row',
 		alignItems: 'center',
 		justifyContent: 'space-between',
-		gap: 13,
+		gap: scaleModerate(13),
 		flexWrap: 'wrap',
 		width: '100%',
-		paddingHorizontal: 8,
+		paddingHorizontal: scaleModerate(8),
 	},
 
 	// Svg styling
@@ -2121,10 +2221,10 @@ const styles = StyleSheet.create({
 		position: 'absolute',
 		top: 0,
 		left: 0,
-		width: 320,
-		height: 270,
+		width: scaleModerate(320),
+		height: scaleModerate(270),
 		backgroundColor: '#2D2C2C',
-		borderRadius: 16,
+		borderRadius: scaleModerate(16),
 		shadowColor: '#000',
 		shadowOpacity: 0.25,
 		shadowOffset: { width: 0, height: 2 },
@@ -2134,9 +2234,9 @@ const styles = StyleSheet.create({
 	},
 	camera: {
 		flex: 1,
-		borderRadius: 16,
-		width: 320,
-		height: 270,
+		borderRadius: scaleModerate(16),
+		width: scaleModerate(320),
+		height: scaleModerate(270),
 	},
 	flipCameraBtn: {
 		position: 'absolute',

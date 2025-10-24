@@ -1,9 +1,13 @@
 import * as React from 'react';
+import { Platform } from 'react-native';
 import Svg, { ClipPath, Defs, G, Path, Rect, SvgProps } from 'react-native-svg';
+
+const SIZE = Platform.OS === 'android' ? 36 : 45;
+
 const SVGComponent = (props: SvgProps) => {
 	const { color } = props;
 	return (
-		<Svg width={45} height={45} viewBox="0 0 35 35" fill="none" {...props}>
+		<Svg width={SIZE} height={SIZE} viewBox="0 0 35 35" fill="none" {...props}>
 			<G clipPath="url(#clip0_305_43071)">
 				<Path
 					d="M9.4657 13.7395C8.61585 13.034 8.49887 11.773 9.20443 10.9232C9.90999 10.0733 11.1709 9.95636 12.0208 10.6619C12.8706 11.3675 12.9876 12.6284 12.282 13.4783C11.5765 14.3281 10.3156 14.4451 9.4657 13.7395Z"

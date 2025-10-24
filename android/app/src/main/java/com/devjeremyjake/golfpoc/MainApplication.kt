@@ -15,6 +15,7 @@ import com.facebook.soloader.SoLoader
 
 import expo.modules.ApplicationLifecycleDispatcher
 import expo.modules.ReactNativeHostWrapper
+import expo.modules.screenrecorder.NotificationHelper
 
 class MainApplication : Application(), ReactApplication {
 
@@ -48,6 +49,7 @@ class MainApplication : Application(), ReactApplication {
       load()
     }
     ApplicationLifecycleDispatcher.onApplicationCreate(this)
+    NotificationHelper.createNotificationChannel(this)
   }
 
   override fun onConfigurationChanged(newConfig: Configuration) {
