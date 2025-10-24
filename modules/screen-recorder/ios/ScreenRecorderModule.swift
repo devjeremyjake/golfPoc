@@ -43,6 +43,10 @@ public class ScreenRecorderModule: Module {
         let destinationUrl = documentDirectory.appendingPathComponent(uniqueFileName)
         myUrl = destinationUrl
         debugPrint("Recording will be saved to: \(destinationUrl)")
+        
+        // Enable microphone audio recording
+        screenRecorder.isMicrophoneEnabled = true
+        
         screenRecorder.startRecording { error in
           if let error = error {
             debugPrint("Error starting recording: \(error.localizedDescription)")
@@ -50,7 +54,7 @@ public class ScreenRecorderModule: Module {
               "isRecording": false
             ])
           } else {
-            debugPrint("Started recording successfully.")
+            debugPrint("Started recording successfully with microphone.")
             self.isCurrentlyRecording = true
             self.sendEvent("onRecordingStateChange", [
               "isRecording": true
@@ -129,6 +133,10 @@ public class ScreenRecorderModule: Module {
           let destinationUrl = documentDirectory.appendingPathComponent(uniqueFileName)
           myUrl = destinationUrl
           debugPrint("Recording will be saved to: \(destinationUrl)")
+          
+          // Enable microphone audio recording
+          screenRecorder.isMicrophoneEnabled = true
+          
           screenRecorder.startRecording { error in
             if let error = error {
               debugPrint("Error starting recording: \(error.localizedDescription)")
@@ -136,7 +144,7 @@ public class ScreenRecorderModule: Module {
                 "isRecording": false
               ])
             } else {
-              debugPrint("Started recording successfully.")
+              debugPrint("Started recording successfully with microphone.")
               self.isCurrentlyRecording = true
               self.sendEvent("onRecordingStateChange", [
                 "isRecording": true

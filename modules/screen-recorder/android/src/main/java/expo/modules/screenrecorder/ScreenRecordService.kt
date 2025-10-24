@@ -168,12 +168,24 @@ class ScreenRecordService : Service() {
         val (width, height) = getScaledDimensions(maxWidth, maxHeight)
         
         with(mediaRecorder) {
+            // Set audio source FIRST, then video source
+            setAudioSource(MediaRecorder.AudioSource.MIC)
             setVideoSource(MediaRecorder.VideoSource.SURFACE)
-            setOutputFormat(MediaRecorder.OutputFormat.THREE_GPP)
+            
+            // Set output format
+            setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+            
+            // Set audio encoder
+            setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+            setAudioEncodingBitRate(128000)
+            setAudioSamplingRate(44100)
+            
+            // Set video encoder
             setVideoEncoder(MediaRecorder.VideoEncoder.H264)
             setVideoEncodingBitRate(VIDEO_BIT_RATE_KILOBITS * 1000)
             setVideoFrameRate(VIDEO_FRAME_RATE)
             setVideoSize(width, height)
+            
             setOutputFile(outputFile)
             prepare()
         }
