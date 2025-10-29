@@ -5,6 +5,8 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 import { throttle } from 'lodash';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
+	ActivityIndicator,
+	Alert,
 	Dimensions,
 	PermissionsAndroid,
 	Platform,
@@ -41,6 +43,7 @@ import KebabSvg from './assets/svgs/KebabSvg';
 import ReverseBtnSvg from './assets/svgs/ReverseBtnSvg';
 import MenusControl from './components/MenusControl';
 import VideoControl from './components/VideoControl';
+import ScreenRecorder from './modules/screen-recorder';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -86,7 +89,6 @@ const Entry = () => {
 	const [kebabOpen, setKebab] = useState<boolean>(false);
 
 	const imageRef = useRef(null);
-	const isRecording = false;
 
 	// Shape drawing states
 	const [isDrawingCircle, setIsDrawingCircle] = useState(false);
@@ -115,6 +117,10 @@ const Entry = () => {
 	// Color states
 	const [currentColor, setCurrentColor] = useState('#FF5E5C');
 	// const [showColorPicker, setShowColorPicker] = useState(false);
+
+	// Recording state
+	const [isRecording, setIsRecording] = useState(false);
+	const [isProcessingVideo, setIsProcessingVideo] = useState(false);
 
 	//   Video states
 	const [videos, setVideos] = useState<{ uri: string | null }[]>([
@@ -617,7 +623,7 @@ const Entry = () => {
 
 		// Handle drawing
 		if (currentTool === 'freedraw') {
-			const command = currentPath === '' ? 'M' : 'L';
+			const command = currentPath.trim() === '' ? 'M' : 'L';
 			const newPoint = `${command}${locationX.toFixed(0)},${locationY.toFixed(
 				0
 			)} `;
@@ -1552,13 +1558,85 @@ const Entry = () => {
 		if (Platform.OS === 'android') {
 			requestPermissions();
 		}
+		// Request screen recording permissions
+		ScreenRecorder.requestPermissions().catch((err) => {
+			console.error('Failed to request screen recording permissions:', err);
+		});
 	}, []);
 
 	// Handle recording start
-	const handleStart = async () => {};
+	const handleStart = async () => {
+		// Show instructions for Android users
+		if (Platform.OS === 'android') {
+			Alert.alert(
+				'Screen Recording Instructions',
+				'When prompted:\n\n1. Tap "Start now"\n2. Select "Entire screen"\n3. Recording will begin automatically',
+				[
+					{
+						text: 'Cancel',
+						style: 'cancel',
+					},
+					{
+						text: 'Continue',
+						onPress: async () => {
+							await startRecordingProcess();
+						},
+					},
+				]
+			);
+		} else {
+			await startRecordingProcess();
+		}
+	};
+
+	const startRecordingProcess = async () => {
+		try {
+			console.log('Starting screen recording...');
+
+			// Calculate crop areas
+			// Top area: header menu (approximately 60-80 pixels)
+			const cropTop = 80;
+			// Bottom area: video controls and menu (approximately 180-200 pixels)
+			const cropBottom = 180;
+
+			await ScreenRecorder.startRecording(cropTop, cropBottom);
+			setIsRecording(true);
+			console.log('Screen recording started successfully');
+		} catch (error: any) {
+			console.error('Failed to start recording:', error);
+
+			// Provide helpful error message
+			let errorMessage = 'Failed to start recording';
+			if (
+				error?.message?.includes('cancelled') ||
+				error?.message?.includes('Entire screen')
+			) {
+				errorMessage =
+					'Recording cancelled. Please select "Entire screen" option when you try again.';
+			} else if (error?.message) {
+				errorMessage = error.message;
+			}
+
+			Alert.alert('Recording Error', errorMessage);
+		}
+	};
 
 	// Handle stop recording
-	const handleStop = async () => {};
+	const handleStop = async () => {
+		try {
+			console.log('Stopping screen recording...');
+			setIsProcessingVideo(true);
+			await ScreenRecorder.stopRecording();
+			setIsRecording(false);
+			setIsProcessingVideo(false);
+			console.log('Screen recording stopped successfully');
+			Alert.alert('Success', 'Recording saved to gallery');
+		} catch (error) {
+			console.error('Failed to stop recording:', error);
+			setIsProcessingVideo(false);
+			Alert.alert('Error', 'Failed to stop recording: ' + error);
+		}
+	};
 
 	return (
 		<SafeAreaView
@@ -1958,9 +2036,9 @@ const Entry = () => {
 					openCamera={openCamera}
 					setCameraState={() => setCamera((prev) => !prev)}
 					takeSnapShot={onSaveImageAsync}
-					isRecording={false}
+					isRecording={isRecording}
 					toggleRecording={isRecording ? handleStop : handleStart}
-					disabled={false}
+					disabled={isProcessingVideo}
 				/>
 				<VideoControl
 					handleSeek={handleSeek}
@@ -1989,6 +2067,18 @@ const Entry = () => {
 					<Pressable onPress={() => null}>
 						<Text style={styles.kebabMenuText}>Share Video</Text>
 					</Pressable>
+				</View>
+			)}
+			{/* Processing overlay */}
+			{isProcessingVideo && (
+				<View style={styles.processingOverlay}>
+					<View style={styles.processingContainer}>
+						<ActivityIndicator size="large" color="#FF5E5C" />
+						<Text style={styles.processingText}>Processing Video...</Text>
+						<Text style={styles.processingSubtext}>
+							Cropping and saving to gallery
+						</Text>
+					</View>
 				</View>
 			)}
 		</SafeAreaView>
@@ -2142,5 +2232,42 @@ const styles = StyleSheet.create({
 		position: 'absolute',
 		top: 20,
 		right: 20,
+	},
+
+	// Processing overlay
+	processingOverlay: {
+		position: 'absolute',
+		top: 0,
+		left: 0,
+		right: 0,
+		bottom: 0,
+		backgroundColor: 'rgba(0, 0, 0, 0.85)',
+		justifyContent: 'center',
+		alignItems: 'center',
+		zIndex: 1000,
+	},
+	processingContainer: {
+		backgroundColor: '#2D2C2C',
+		borderRadius: 16,
+		padding: 30,
+		alignItems: 'center',
+		shadowColor: '#000',
+		shadowOpacity: 0.5,
+		shadowOffset: { width: 0, height: 4 },
+		shadowRadius: 10,
+		elevation: 20,
+	},
+	processingText: {
+		color: '#FFFFFF',
+		fontSize: 20,
+		fontWeight: '600',
+		marginTop: 20,
+		marginBottom: 10,
+	},
+	processingSubtext: {
+		color: '#AAAAAA',
+		fontSize: 14,
+		fontWeight: '400',
+		textAlign: 'center',
 	},
 });

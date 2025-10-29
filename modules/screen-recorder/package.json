@@ -1,0 +1,23 @@
+{
+	"name": "@golfpoc/screen-recorder",
+	"version": "1.0.0",
+	"description": "Native screen recording module with audio for Android and iOS",
+	"main": "index.ts",
+	"scripts": {
+		"test": "echo \"No tests specified\""
+	},
+	"keywords": [
+		"react-native",
+		"screen-recording",
+		"mediaProjection",
+		"replaykit",
+		"android",
+		"ios"
+	],
+	"author": "",
+	"license": "MIT",
+	"peerDependencies": {
+		"react": "*",
+		"react-native": "*"
+	}
+}
